@@ -1,6 +1,4 @@
 import os, sys
-from platform import platform
-
 import pygame, pygame_menu
 import random
 
