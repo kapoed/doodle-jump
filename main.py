@@ -1,5 +1,7 @@
-import os, sys
-import pygame, pygame_menu
+import os
+import sys
+import pygame
+import pygame_menu
 import random
 
 
@@ -31,8 +33,8 @@ spring_normal_image = load_image('spring1.png')
 spring_activate_image = load_image('spring2.png')
 propeller_normal_image = load_image('propeller_normal.png')
 propeller_animation_images = (load_image('propeller1.png'),
-                             load_image('propeller2.png'),
-                             load_image('propeller3.png'))
+                              load_image('propeller2.png'),
+                              load_image('propeller3.png'))
 platform_image = load_image('platform.png')
 moving_platform_image = load_image('moving_platform.png')
 vanishing_platform_image = load_image('vanishing_platform.png')
@@ -59,42 +61,11 @@ class Spring(pygame.sprite.Sprite):
             self.image = spring_activate_image
 
 
-
 class Platform(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__(platforms_group, all_sprites)
         self.image = platform_image
         self.rect = self.image.get_rect(center=(x, y))
-
-
-# class Helicopter(pygame.sprite.Sprite):
-#     def __init__(self, x, y):
-#         super().__init__(bonuses_group, all_sprites)
-#         self.image = propeller_normal_image
-#         self.rect = self.image.get_rect(center=(x, y))
-#         self.animation_index = 0
-#         self.is_collected = False
-#         self.start_time = 0
-#
-#     def update(self):
-#         if self.is_collected:
-#             self.rect.y -= 8
-#             self.image = propeller_animation_images[self.animation_index]
-#             self.animation_index += 1
-#
-#             if self.animation_index >= len(propeller_animation_images):
-#                 self.animation_index = 0
-#
-#             if pygame.time.get_ticks() - self.start_time >= 1000:
-#                 self.is_collected = False
-#                 self.rect.y += 5
-#                 doodle.deactivate_helicopter()
-
-    def collect(self, player):
-        self.is_collected = True
-        self.start_time = pygame.time.get_ticks()
-        player.activate_helicopter()
-        self.rect.centerx = player.rect.centerx
 
 
 class VanishingPlatform(Platform):
@@ -279,7 +250,6 @@ def scroll_screen(player, platforms, scroll):
                 if random.random() < 0.8:
                     Spring(x, y - 10)
                 else:
-                    # Helicopter(x, y - 15)
                     pass
             if random.random() < 0.3:
                 x = random.randint(30, WIDTH - 30)
@@ -327,17 +297,10 @@ def check_collisions(player, platforms):
                         player.velocity = -30
                         bonus.activate()
                         break
-            # if isinstance(bonus, Helicopter) and player.rect.colliderect(bonus.rect):
-            #     bonus.collect(player)
-            #     break
-
-
-def show_statistic():
-    pass
 
 
 def reset_game():
-    global all_sprites, player_group, platforms_group, bullets_group, spawn_platforms, difficulty_change,\
+    global all_sprites, player_group, platforms_group, bullets_group, spawn_platforms, difficulty_change, \
         safe_platform_spawn, score, scroll, doodle_speed, doodle, platforms, move_right, move_left, run, monsters_group
 
     all_sprites.empty()
@@ -358,11 +321,37 @@ def reset_game():
     run = False
 
 
+def save_score(score):
+    with open('records.txt', 'a') as f:
+        f.write(f"{int(score)}\n")
+
+
+def show_statistic():
+    try:
+        with open('records.txt', 'r') as f:
+            scores = [int(line.strip()) for line in f if line.strip().isdigit()]
+    except FileNotFoundError:
+        scores = []
+
+    scores = sorted(scores, reverse=True)[:10]
+
+    statistic_menu = pygame_menu.Menu('Статистика', WIDTH, HEIGHT, theme=pygame_menu.themes.THEME_GREEN)
+    statistic_menu.add.label('Последние 10 рекордов:')
+    if not scores:
+        statistic_menu.add.label('Рекордов пока нет')
+    else:
+        for idx, score in enumerate(scores, 1):
+            statistic_menu.add.label(f'{idx}. {score}')
+    statistic_menu.add.button('Назад', reset_game)
+    statistic_menu.mainloop(screen)
+
+
 def start_the_game():
     reset_game()
     global run
     run = True
     menu.disable()
+
 
 all_sprites = pygame.sprite.Group()
 player_group = pygame.sprite.Group()
@@ -449,5 +438,9 @@ while True:
 
         pygame.display.flip()
         clock.tick(FPS)
+
+    if score > 0:
+        save_score(score)
+        score = 0
 
     menu.enable()
