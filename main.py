@@ -27,13 +27,37 @@ monsters_image = (load_image('monster1.png'),
                   load_image('monster2.png'),
                   load_image('monster3.png'))
 bullet_image = load_image('bullet.png')
+spring_normal_image = load_image('spring1.png')
+spring_activate_image = load_image('spring2.png')
+propeller_normal_image = load_image('propeller_normal.png')
+propeller_animation_images = (load_image('propeller1.png'),
+                             load_image('propeller2.png'),
+                             load_image('propeller3.png'))
 platform_image = load_image('platform.png')
 moving_platform_image = load_image('moving_platform.png')
 vanishing_platform_image = load_image('vanishing_platform.png')
-breaking_platforms = (load_image('breaking_platform1.png'),
-                      load_image('breaking_platform2.png'),
-                      load_image('breaking_platform3.png'),
-                      load_image('breaking_platform4.png'))
+breaking_platform_images = (load_image('breaking_platform1.png'),
+                            load_image('breaking_platform2.png'),
+                            load_image('breaking_platform3.png'),
+                            load_image('breaking_platform4.png'))
+
+
+class Spring(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__(bonuses_group, all_sprites)
+        self.image = spring_normal_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.is_active = False
+
+    def activate(self):
+        self.is_active = True
+        self.image = spring_activate_image
+        self.rect = self.rect.move(0, -15)
+
+    def update(self):
+        if self.is_active:
+            self.image = spring_activate_image
+
 
 
 class Platform(pygame.sprite.Sprite):
@@ -41,6 +65,36 @@ class Platform(pygame.sprite.Sprite):
         super().__init__(platforms_group, all_sprites)
         self.image = platform_image
         self.rect = self.image.get_rect(center=(x, y))
+
+
+# class Helicopter(pygame.sprite.Sprite):
+#     def __init__(self, x, y):
+#         super().__init__(bonuses_group, all_sprites)
+#         self.image = propeller_normal_image
+#         self.rect = self.image.get_rect(center=(x, y))
+#         self.animation_index = 0
+#         self.is_collected = False
+#         self.start_time = 0
+#
+#     def update(self):
+#         if self.is_collected:
+#             self.rect.y -= 8
+#             self.image = propeller_animation_images[self.animation_index]
+#             self.animation_index += 1
+#
+#             if self.animation_index >= len(propeller_animation_images):
+#                 self.animation_index = 0
+#
+#             if pygame.time.get_ticks() - self.start_time >= 1000:
+#                 self.is_collected = False
+#                 self.rect.y += 5
+#                 doodle.deactivate_helicopter()
+
+    def collect(self, player):
+        self.is_collected = True
+        self.start_time = pygame.time.get_ticks()
+        player.activate_helicopter()
+        self.rect.centerx = player.rect.centerx
 
 
 class VanishingPlatform(Platform):
@@ -55,15 +109,15 @@ class VanishingPlatform(Platform):
 class BreakingPlatform(Platform):
     def __init__(self, x, y):
         super().__init__(x, y)
-        self.image = breaking_platforms[0]
+        self.image = breaking_platform_images[0]
         self.breaking_stage = 0
         self.is_broken = False
 
     def update(self):
         if self.is_broken:
             self.breaking_stage += 1
-            if self.breaking_stage < len(breaking_platforms):
-                self.image = breaking_platforms[self.breaking_stage]
+            if self.breaking_stage < len(breaking_platform_images):
+                self.image = breaking_platform_images[self.breaking_stage]
             else:
                 self.rect = self.rect.move(0, 9)
 
@@ -119,14 +173,24 @@ class Doodle(pygame.sprite.Sprite):
         self.velocity = 0
         self.gravity = 0.6
         self.is_dead = False
+        self.has_helicopter = False
 
     def update(self):
         if not self.is_dead:
-            self.velocity += self.gravity
-            self.rect.y += self.velocity
+            if self.has_helicopter:
+                self.rect.y -= 8
+            else:
+                self.velocity += self.gravity
+                self.rect.y += self.velocity
         else:
             self.velocity += self.gravity
             self.rect.y += self.velocity
+
+    def activate_helicopter(self):
+        self.has_helicopter = True
+
+    def deactivate_helicopter(self):
+        self.has_helicopter = False
 
     def move(self, speed):
         self.rect = self.rect.move(speed, 0)
@@ -190,6 +254,11 @@ def scroll_screen(player, platforms, scroll):
             if monster.rect.y > HEIGHT:
                 monster.kill()
 
+        for bonus in bonuses_group:
+            bonus.rect.y -= player.velocity
+            if bonus.rect.y > HEIGHT:
+                bonus.kill()
+
         score += abs(player.velocity)
         safe_platform_spawn += abs(player.velocity)
         if int(safe_platform_spawn) >= 150:
@@ -203,7 +272,15 @@ def scroll_screen(player, platforms, scroll):
             Monster(random.randint(50, WIDTH - 50), -50)
 
         while len(platforms) < spawn_platforms:
-            Platform(random.randint(30, WIDTH - 30), -random.randrange(0, 400, 20))
+            x = random.randint(30, WIDTH - 30)
+            y = -random.randrange(0, 400, 20)
+            Platform(x, y)
+            if random.random() < 0.15:
+                if random.random() < 0.8:
+                    Spring(x, y - 10)
+                else:
+                    # Helicopter(x, y - 15)
+                    pass
             if random.random() < 0.3:
                 x = random.randint(30, WIDTH - 30)
                 MovingPlatform(x, -random.randint(50, 100))
@@ -224,7 +301,7 @@ def check_collisions(player, platforms):
             platform_top = platform.rect.top
             if player.rect.colliderect(platform.rect) and player_bottom >= platform_top:
                 overlap = player_bottom - platform_top
-                if overlap < 20:
+                if overlap < platform.rect.h + 10:
                     if isinstance(platform, BreakingPlatform):
                         platform.break_platform()
                     else:
@@ -242,6 +319,17 @@ def check_collisions(player, platforms):
                     global move_left, move_right
                     move_left = False
                     move_right = False
+
+        for bonus in bonuses_group:
+            if isinstance(bonus, Spring):
+                if player.rect.colliderect(bonus.rect):
+                    if player.rect.bottom <= bonus.rect.top + 15:
+                        player.velocity = -30
+                        bonus.activate()
+                        break
+            # if isinstance(bonus, Helicopter) and player.rect.colliderect(bonus.rect):
+            #     bonus.collect(player)
+            #     break
 
 
 def show_statistic():
@@ -281,6 +369,7 @@ player_group = pygame.sprite.Group()
 platforms_group = pygame.sprite.Group()
 bullets_group = pygame.sprite.Group()
 monsters_group = pygame.sprite.Group()
+bonuses_group = pygame.sprite.Group()
 spawn_platforms = 20
 difficulty_change = 10000
 safe_platform_spawn = 0
